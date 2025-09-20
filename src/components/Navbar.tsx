@@ -1,15 +1,15 @@
 import Link from "next/link";
-import LogoutButton from "./LogoutButon";
+import LogoutButton from "./LogoutButton";
 
-export default function Navbar(username : string) {
+export default function Navbar({username} : {username?:string}) {
 
   return (
     <nav>
-      <div>
+      <div className="flex flex-row p-3 bg-emerald-500 justify-between ">
         <Link href="/">
         CanteenConnect
         </Link>
-        <div>
+        <div className="flex gap-x-5">
           <Link href="/profile">
             Welcome, {username || "Guest"}
           </Link>
