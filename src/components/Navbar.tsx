@@ -5,7 +5,7 @@ export default function Navbar({username} : {username?:string}) {
 
   return (
     <nav>
-      <div className="flex flex-row p-3 bg-emerald-500 justify-between ">
+      <div className="flex flex-row p-3 bg-emerald-800 justify-between text-white h-12">
         <Link href="/">
         CanteenConnect
         </Link>
