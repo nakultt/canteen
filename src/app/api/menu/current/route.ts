@@ -33,14 +33,14 @@ export async function GET() {
       });
     }
 
-    const foodItem = activeMenu.items
+    const foodItems = activeMenu.items
       .filter((items) => items.foodItem.isAvailable)
       .map((item) => item.foodItem);
 
     return NextResponse.json({
-      mealtype: activeMenu.mealType,
+      mealType: activeMenu.mealType,
       closingTime: activeMenu.endTime,
-      foodItem,
+      foodItems: foodItems,
     });
   } catch (e) {
     console.error("Error fetching current menu:", e);
