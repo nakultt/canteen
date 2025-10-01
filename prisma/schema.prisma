@@ -1,0 +1,142 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// This is your Prisma schema file.
+// Learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+
+// --- ENUMS ---
+// Enums provide a fixed set of options for a field, ensuring data integrity.
+
+enum Role {
+  USER
+  ADMIN
+}
+
+enum OrderStatus {
+  PENDING
+  PREPARING
+  READY
+  COMPLETED
+  CANCELLED
+}
+
+// --- MODELS ---
+// Each model maps to a table in your database.
+
+model User {
+  id        Int      @id @default(autoincrement())
+  email     String   @unique
+  name      String?
+  password  String   // Password hash
+  role      Role     @default(USER)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  cart   Cart?    // A user can have one cart (optional)
+  orders Order[]  // A user can have many orders
+}
+
+model FoodItem {
+  id          Int      @id @default(autoincrement())
+  name        String   @unique
+  description String?
+  price       Float
+  imageUrl    String?
+  isAvailable Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  menuItems  MenuItem[]
+  cartItems  CartItem[]
+  orderItems OrderItem[]
+}
+
+model Menu {
+  id        Int      @id @default(autoincrement())
+  dayOfWeek String   // e.g., "Monday", "Tuesday", etc.
+  mealType  String   // e.g., "Breakfast", "Lunch", "Snacks", "Dinner"
+  startTime DateTime // Use DateTime to store time, ignoring the date part in your logic
+  endTime   DateTime // Use DateTime to store time, ignoring the date part in your logic
+
+  // Relation: A menu contains many menu items
+  items MenuItem[]
+}
+
+// This is a "join" or "pivot" table connecting Menu and FoodItem.
+// It signifies which food items are available in which menu slot.
+model MenuItem {
+  id Int @id @default(autoincrement())
+
+  // Relations
+  menu       Menu     @relation(fields: [menuId], references: [id], onDelete: Cascade)
+  menuId     Int
+  foodItem   FoodItem @relation(fields: [foodItemId], references: [id], onDelete: Cascade)
+  foodItemId Int
+
+  @@unique([menuId, foodItemId]) // Prevents adding the same item to the same menu twice
+}
+
+model Cart {
+  id        Int      @id @default(autoincrement())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  user   User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId Int        @unique // Each user has only one cart
+  items  CartItem[]
+}
+
+model CartItem {
+  id       Int @id @default(autoincrement())
+  quantity Int @default(1)
+
+  // Relations
+  cart       Cart     @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  cartId     Int
+  foodItem   FoodItem @relation(fields: [foodItemId], references: [id], onDelete: Cascade)
+  foodItemId Int
+
+  @@unique([cartId, foodItemId]) // Prevents adding the same food item to the cart twice
+}
+
+model Order {
+  id          Int         @id @default(autoincrement())
+  totalAmount Float
+  status      OrderStatus @default(PENDING)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  // Relations
+  user      User        @relation(fields: [userId], references: [id])
+  userId    Int
+  orderItems OrderItem[]
+}
+
+model OrderItem {
+  id       Int   @id @default(autoincrement())
+  quantity Int
+  price    Float // Price of the item at the time of order
+
+  // Relations
+  order      Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderId    Int
+  foodItem   FoodItem @relation(fields: [foodItemId], references: [id])
+  foodItemId Int
+}
