@@ -9,9 +9,6 @@ export default function Home() {
   return (
     <div>
       <Navbar username="Nakul" />
-      <div className="flex items-center justify-center bg-green-200 h-12 text-2xl">
-        LUNCH orders closes on 11:30 PM
-      </div>
       <MenuDisplay userId={userId} />
       <Cart userId={userId} />
     </div>
