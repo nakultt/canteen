@@ -10,7 +10,9 @@
     "format": "biome format --write"
   },
   "dependencies": {
+    "dotenv": "^16.4.7",
     "next": "16.1.6",
+    "pg": "^8.13.1",
     "react": "19.2.3",
     "react-dom": "19.2.3"
   },
@@ -18,6 +20,7 @@
     "@biomejs/biome": "2.2.0",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
+    "@types/pg": "^8.11.10",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "babel-plugin-react-compiler": "1.0.0",
