@@ -1,4 +1,5 @@
-import { query, queryOne } from "@/lib/db";
+import { queryOne } from "@/lib/db";
+import { getAuthUser } from "@/lib/auth";
 import { NextResponse } from "next/server";
 
 // GET user profile
@@ -7,7 +8,24 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const authUser = await getAuthUser(request);
+    if (!authUser) {
+      return NextResponse.json(
+        { error: "Authentication required" },
+        { status: 401 }
+      );
+    }
+
     const { id } = await params;
+    const targetId = Number(id);
+
+    // Users can only view their own profile; DEV/ADMIN can view any
+    if (authUser.role === "USER" && authUser.id !== targetId) {
+      return NextResponse.json(
+        { error: "You can only view your own profile" },
+        { status: 403 }
+      );
+    }
 
     const user = await queryOne<{
       id: number;
@@ -20,7 +38,7 @@ export async function GET(
     }>(
       `SELECT id, email, name, role, company_id, created_at, updated_at 
        FROM users WHERE id = $1`,
-      [id]
+      [targetId]
     );
 
     if (!user) {
@@ -44,6 +62,7 @@ export async function GET(
       company,
     });
   } catch (error) {
+    if (error instanceof Response) return error;
     console.error("Error fetching user:", error);
     return NextResponse.json(
       { error: "Failed to fetch user" },
@@ -58,7 +77,25 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const authUser = await getAuthUser(request);
+    if (!authUser) {
+      return NextResponse.json(
+        { error: "Authentication required" },
+        { status: 401 }
+      );
+    }
+
     const { id } = await params;
+    const targetId = Number(id);
+
+    // Users can only update their own profile
+    if (authUser.role === "USER" && authUser.id !== targetId) {
+      return NextResponse.json(
+        { error: "You can only update your own profile" },
+        { status: 403 }
+      );
+    }
+
     const body = await request.json();
     const { name, email } = body;
 
@@ -66,7 +103,7 @@ export async function PUT(
     if (email) {
       const existing = await queryOne<{ id: number }>(
         "SELECT id FROM users WHERE email = $1 AND id != $2",
-        [email, id]
+        [email, targetId]
       );
       if (existing) {
         return NextResponse.json(
@@ -89,7 +126,7 @@ export async function PUT(
            email = COALESCE($2, email)
        WHERE id = $3
        RETURNING id, email, name, role, company_id`,
-      [name, email, id]
+      [name, email, targetId]
     );
 
     if (!updated) {
@@ -104,6 +141,7 @@ export async function PUT(
       message: "Profile updated successfully",
     });
   } catch (error) {
+    if (error instanceof Response) return error;
     console.error("Error updating user:", error);
     return NextResponse.json(
       { error: "Failed to update user" },

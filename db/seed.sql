@@ -1,5 +1,5 @@
 -- Canteen Seed Data
--- Sample data for development
+-- Production-ready seed with bcrypt-hashed passwords
 
 -- =====================
 -- CLEAR EXISTING DATA
@@ -16,23 +16,26 @@ INSERT INTO companies (name, address) VALUES
 ('Hotel Grand Kitchen', '456 Hospitality Avenue, Downtown');
 
 -- =====================
--- USERS
+-- USERS (passwords are bcrypt-hashed)
 -- =====================
 
 -- DEV user (global admin, no company)
+-- Password: devpass123
 INSERT INTO users (email, name, password, role, company_id) VALUES
-('dev@canteen.com', 'Dev Admin', 'devpass123', 'DEV', NULL);
+('dev@canteen.com', 'Dev Admin', '$2b$12$ruMSTvs5DFhtM/jGoNWdC.vizgu0KoRLbZfAY8jD2AHl3Sv9aahH2', 'DEV', NULL);
 
 -- ADMIN users (per company)
+-- Password: admin123
 INSERT INTO users (email, name, password, role, company_id) VALUES
-('admin@techcampus.com', 'Tech Campus Admin', 'admin123', 'ADMIN', 1),
-('admin@hotelgrand.com', 'Hotel Grand Admin', 'admin123', 'ADMIN', 2);
+('admin@techcampus.com', 'Tech Campus Admin', '$2b$12$2mHeq.GSt8X.1OC0uMl2mO.VYMKPqpfXoldbvCUe.fVjpiWBD8bYa', 'ADMIN', 1),
+('admin@hotelgrand.com', 'Hotel Grand Admin', '$2b$12$2mHeq.GSt8X.1OC0uMl2mO.VYMKPqpfXoldbvCUe.fVjpiWBD8bYa', 'ADMIN', 2);
 
 -- Regular users
+-- Password: password123
 INSERT INTO users (email, name, password, role, company_id) VALUES
-('nakul@example.com', 'Nakul', 'password123', 'USER', 1),
-('jane@example.com', 'Jane Smith', 'password123', 'USER', 1),
-('john@example.com', 'John Doe', 'password123', 'USER', 2);
+('nakul@example.com', 'Nakul', '$2b$12$NtJt5sAQt99/l1L3h4zUdOyJudOc4SPyW8Pjw.vEvNYa4EL92jja6', 'USER', 1),
+('jane@example.com', 'Jane Smith', '$2b$12$NtJt5sAQt99/l1L3h4zUdOyJudOc4SPyW8Pjw.vEvNYa4EL92jja6', 'USER', 1),
+('john@example.com', 'John Doe', '$2b$12$NtJt5sAQt99/l1L3h4zUdOyJudOc4SPyW8Pjw.vEvNYa4EL92jja6', 'USER', 2);
 
 -- =====================
 -- FOOD ITEMS (Tech Campus - Company 1)
@@ -154,8 +157,5 @@ BEGIN
     RAISE NOTICE '  - 1 Sample Cart';
     RAISE NOTICE '  - 1 Sample Order';
     RAISE NOTICE '';
-    RAISE NOTICE 'Test Logins:';
-    RAISE NOTICE '  DEV:   dev@canteen.com / devpass123';
-    RAISE NOTICE '  ADMIN: admin@techcampus.com / admin123';
-    RAISE NOTICE '  USER:  nakul@example.com / password123';
+    RAISE NOTICE 'All passwords are bcrypt-hashed. See .env.example for setup.';
 END $$;

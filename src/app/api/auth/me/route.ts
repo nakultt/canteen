@@ -1,19 +1,19 @@
-import { query, queryOne } from "@/lib/db";
+import { queryOne } from "@/lib/db";
+import { getAuthUser } from "@/lib/auth";
 import { NextResponse } from "next/server";
 
 export async function GET(request: Request) {
   try {
-    const { searchParams } = new URL(request.url);
-    const userId = searchParams.get("userId");
-
-    if (!userId) {
+    // Verify JWT token — no more trusting query params
+    const authUser = await getAuthUser(request);
+    if (!authUser) {
       return NextResponse.json(
         { error: "Not authenticated" },
         { status: 401 }
       );
     }
 
-    // Get user from database
+    // Get full user data from database
     const user = await queryOne<{
       id: number;
       email: string;
@@ -24,7 +24,7 @@ export async function GET(request: Request) {
     }>(
       `SELECT id, email, name, role, company_id, created_at 
        FROM users WHERE id = $1`,
-      [userId]
+      [authUser.id]
     );
 
     if (!user) {

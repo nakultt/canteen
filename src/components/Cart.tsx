@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useAuth } from "@/lib/auth-context";
 
 interface CartItem {
   id: number;
@@ -19,6 +20,7 @@ interface CartData {
 }
 
 export default function Cart({ userId }: { userId: number }) {
+  const { authFetch } = useAuth();
   const [cart, setCart] = useState<CartData | null>(null);
   const [loading, setLoading] = useState(true);
   const [processingItem, setProcessingItem] = useState<number | null>(null);
@@ -30,7 +32,7 @@ export default function Cart({ userId }: { userId: number }) {
 
   const fetchCart = async () => {
     try {
-      const response = await fetch(`/api/cart?userId=${userId}`);
+      const response = await authFetch("/api/cart");
       const data = await response.json();
       setCart(data);
     } catch (error) {
@@ -43,10 +45,10 @@ export default function Cart({ userId }: { userId: number }) {
   const removeItem = async (foodItemId: number, removeAll = false) => {
     setProcessingItem(foodItemId);
     try {
-      const response = await fetch("/api/cart/remove", {
+      const response = await authFetch("/api/cart/remove", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId, foodItemId, removeAll }),
+        body: JSON.stringify({ foodItemId, removeAll }),
       });
 
       if (response.ok) {
@@ -63,10 +65,10 @@ export default function Cart({ userId }: { userId: number }) {
   const addItem = async (foodItemId: number) => {
     setProcessingItem(foodItemId);
     try {
-      const response = await fetch("/api/cart/add", {
+      const response = await authFetch("/api/cart/add", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId, foodItemId, quantity: 1 }),
+        body: JSON.stringify({ foodItemId, quantity: 1 }),
       });
 
       if (response.ok) {
@@ -88,17 +90,17 @@ export default function Cart({ userId }: { userId: number }) {
 
     setPlacingOrder(true);
     try {
-      const response = await fetch("/api/order/create", {
+      const response = await authFetch("/api/order/create", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId }),
+        body: JSON.stringify({}),
       });
 
       const data = await response.json();
 
       if (response.ok) {
         alert("Order placed successfully!");
-        fetchCart(); // Refresh cart (should be empty now)
+        fetchCart();
       } else {
         alert(data.error || "Failed to place order");
       }

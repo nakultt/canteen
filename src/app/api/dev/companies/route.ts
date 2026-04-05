@@ -1,9 +1,19 @@
 import { query } from "@/lib/db";
+import { getAuthUser } from "@/lib/auth";
+import { eventBus } from "@/lib/events";
 import { NextResponse } from "next/server";
 
-// GET all companies
-export async function GET() {
+// GET all companies — DEV only
+export async function GET(request: Request) {
   try {
+    const user = await getAuthUser(request);
+    if (!user) {
+      return NextResponse.json({ error: "Authentication required" }, { status: 401 });
+    }
+    if (user.role !== "DEV") {
+      return NextResponse.json({ error: "DEV access required" }, { status: 403 });
+    }
+
     const companies = await query<{
       id: number;
       name: string;
@@ -24,25 +34,28 @@ export async function GET() {
 
     return NextResponse.json({ companies });
   } catch (error) {
+    if (error instanceof Response) return error;
     console.error("Error fetching companies:", error);
-    return NextResponse.json(
-      { error: "Failed to fetch companies" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Failed to fetch companies" }, { status: 500 });
   }
 }
 
-// CREATE company
+// CREATE company — DEV only
 export async function POST(request: Request) {
   try {
+    const user = await getAuthUser(request);
+    if (!user) {
+      return NextResponse.json({ error: "Authentication required" }, { status: 401 });
+    }
+    if (user.role !== "DEV") {
+      return NextResponse.json({ error: "DEV access required" }, { status: 403 });
+    }
+
     const body = await request.json();
     const { name, address } = body;
 
     if (!name) {
-      return NextResponse.json(
-        { error: "Company name is required" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "Company name is required" }, { status: 400 });
     }
 
     const company = await query<{
@@ -56,15 +69,18 @@ export async function POST(request: Request) {
       [name, address]
     );
 
+    eventBus.emit({
+      type: "company:created",
+      data: { company: company[0] },
+    });
+
     return NextResponse.json({
       company: company[0],
       message: "Company created successfully",
     });
   } catch (error) {
+    if (error instanceof Response) return error;
     console.error("Error creating company:", error);
-    return NextResponse.json(
-      { error: "Failed to create company" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Failed to create company" }, { status: 500 });
   }
 }

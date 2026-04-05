@@ -1,9 +1,20 @@
 import { query } from "@/lib/db";
+import { getAuthUser } from "@/lib/auth";
+import { hashPassword } from "@/lib/auth";
+import { eventBus } from "@/lib/events";
 import { NextResponse } from "next/server";
 
-// GET all users
-export async function GET() {
+// GET all users — DEV only
+export async function GET(request: Request) {
   try {
+    const user = await getAuthUser(request);
+    if (!user) {
+      return NextResponse.json({ error: "Authentication required" }, { status: 401 });
+    }
+    if (user.role !== "DEV") {
+      return NextResponse.json({ error: "DEV access required" }, { status: 403 });
+    }
+
     const users = await query<{
       id: number;
       email: string;
@@ -24,17 +35,23 @@ export async function GET() {
 
     return NextResponse.json({ users });
   } catch (error) {
+    if (error instanceof Response) return error;
     console.error("Error fetching users:", error);
-    return NextResponse.json(
-      { error: "Failed to fetch users" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Failed to fetch users" }, { status: 500 });
   }
 }
 
-// CREATE user
+// CREATE user — DEV only
 export async function POST(request: Request) {
   try {
+    const user = await getAuthUser(request);
+    if (!user) {
+      return NextResponse.json({ error: "Authentication required" }, { status: 401 });
+    }
+    if (user.role !== "DEV") {
+      return NextResponse.json({ error: "DEV access required" }, { status: 403 });
+    }
+
     const body = await request.json();
     const { email, name, password, role, companyId } = body;
 
@@ -45,6 +62,19 @@ export async function POST(request: Request) {
       );
     }
 
+    // Enforce single DEV account
+    if (role === "DEV") {
+      const existingDev = await query<{ id: number }>(
+        "SELECT id FROM users WHERE role = 'DEV'"
+      );
+      if (existingDev.length > 0) {
+        return NextResponse.json(
+          { error: "Only one DEV account is allowed in the system" },
+          { status: 400 }
+        );
+      }
+    }
+
     // Check if email exists
     const existing = await query<{ id: number }>(
       "SELECT id FROM users WHERE email = $1",
@@ -52,16 +82,16 @@ export async function POST(request: Request) {
     );
 
     if (existing.length > 0) {
-      return NextResponse.json(
-        { error: "Email already in use" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "Email already in use" }, { status: 400 });
     }
+
+    // Hash password before storing
+    const hashedPassword = await hashPassword(password);
 
     // DEV role cannot have company_id
     const actualCompanyId = role === "DEV" ? null : companyId;
 
-    const user = await query<{
+    const newUser = await query<{
       id: number;
       email: string;
       name: string;
@@ -71,18 +101,21 @@ export async function POST(request: Request) {
       `INSERT INTO users (email, name, password, role, company_id)
        VALUES ($1, $2, $3, $4, $5)
        RETURNING id, email, name, role, company_id`,
-      [email, name, password, role, actualCompanyId]
+      [email, name, hashedPassword, role, actualCompanyId]
     );
 
+    eventBus.emit({
+      type: "user:created",
+      data: { user: newUser[0] },
+    });
+
     return NextResponse.json({
-      user: user[0],
+      user: newUser[0],
       message: "User created successfully",
     });
   } catch (error) {
+    if (error instanceof Response) return error;
     console.error("Error creating user:", error);
-    return NextResponse.json(
-      { error: "Failed to create user" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Failed to create user" }, { status: 500 });
   }
 }

@@ -1,36 +1,131 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# CanteenConnect
 
-## Getting Started
+A multi-tenant canteen food ordering platform built with Next.js and PostgreSQL. Supports three role-based dashboards: **USER** (order food), **ADMIN** (manage canteen), and **DEV** (system administration).
 
-First, run the development server:
+## Tech Stack
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+- **Frontend**: Next.js 16, React 19, TypeScript, Tailwind CSS 4
+- **Backend**: Next.js API Routes, PostgreSQL, raw SQL (`pg`)
+- **Auth**: bcrypt password hashing, JWT sessions (`jose`), HttpOnly cookies
+- **Real-time**: Server-Sent Events (SSE) for live dashboard updates
+- **Tooling**: pnpm, Biome (lint/format), GitHub Actions CI
+
+## Architecture
+
+```
+┌──────────┐   ┌──────────┐   ┌──────────┐
+│   USER   │   │  ADMIN   │   │   DEV    │
+│ Dashboard│   │ Dashboard│   │ Dashboard│
+└────┬─────┘   └────┬─────┘   └────┬─────┘
+     │              │              │
+     └──────────────┼──────────────┘
+                    │ SSE + REST
+              ┌─────┴──────┐
+              │  Next.js   │
+              │ API Routes │
+              │  (JWT Auth)│
+              └─────┬──────┘
+              ┌─────┴──────┐
+              │ PostgreSQL │
+              └────────────┘
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### Role System
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+| Role | Access | Description |
+|------|--------|-------------|
+| **USER** | `/` `/orders` `/profile` `/help` | Browse menus, add to cart, place orders |
+| **ADMIN** | `/admin/*` | Manage food items and orders for their company |
+| **DEV** | `/dev/*` | Global system admin — manage all companies and users |
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- Only **one DEV account** exists in the system (enforced at API level).
+- Each role has its own login portal (`/login`, `/admin/login`, `/dev/login`).
 
-## Learn More
+## Setup
 
-To learn more about Next.js, take a look at the following resources:
+### Prerequisites
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- Node.js 20+
+- pnpm 10+
+- PostgreSQL 14+
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+### 1. Clone & Install
 
-## Deploy on Vercel
+```bash
+git clone https://github.com/nakultt/canteen.git
+cd canteen
+pnpm install
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+### 2. Database Setup
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```bash
+# Create the database
+createdb canteen
+
+# Run schema
+psql -d canteen -f db/schema.sql
+
+# Seed data (bcrypt-hashed passwords)
+psql -d canteen -f db/seed.sql
+```
+
+### 3. Environment Variables
+
+```bash
+cp .env.example .env.local
+# Edit .env.local with your database URL and generate a JWT secret:
+# node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
+```
+
+Required variables:
+- `DATABASE_URL` — PostgreSQL connection string
+- `JWT_SECRET` — Random secret for JWT signing (min 32 characters)
+
+### 4. Run
+
+```bash
+pnpm dev
+```
+
+Open [http://localhost:3000](http://localhost:3000).
+
+### Default Accounts
+
+| Role | Email | Password |
+|------|-------|----------|
+| DEV | `dev@canteen.com` | `devpass123` |
+| ADMIN | `admin@techcampus.com` | `admin123` |
+| USER | `nakul@example.com` | `password123` |
+
+## API Security
+
+All API routes enforce:
+
+- **JWT Authentication** — Every request must include a valid JWT (via HttpOnly cookie or `Authorization: Bearer` header).
+- **Role-based Authorization** — Admin routes require `ADMIN`/`DEV`, Dev routes require `DEV`.
+- **Ownership Checks** — Users can only access their own data (cart, orders, profile).
+- **Company Scoping** — ADMIN users can only manage their own company's data.
+- **Password Hashing** — All passwords stored as bcrypt hashes (12 rounds).
+
+## Live Updates
+
+All three dashboards receive real-time updates via Server-Sent Events (SSE):
+
+- **User Dashboard** — Cart and order status updates
+- **Admin Dashboard** — New orders, food item changes
+- **DEV Dashboard** — User/company changes, global order activity
+
+## Scripts
+
+```bash
+pnpm dev       # Start development server
+pnpm build     # Production build
+pnpm start     # Start production server
+pnpm lint      # Run Biome linter
+pnpm format    # Auto-format code
+```
+
+## License
+
+GPL-3.0 — see [LICENSE](LICENSE).

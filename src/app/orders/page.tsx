@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth-context";
+import { useLiveUpdates } from "@/lib/use-live-updates";
 import Navbar from "@/components/Navbar";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
@@ -23,10 +24,20 @@ interface Order {
 }
 
 export default function MyOrders() {
-  const { user, loading: authLoading } = useAuth();
+  const { user, loading: authLoading, authFetch } = useAuth();
   const router = useRouter();
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Live updates — refresh when order is created or updated
+  useLiveUpdates(
+    (event) => {
+      if (event.type === "order:created" || event.type === "order:updated") {
+        fetchOrders();
+      }
+    },
+    !!user
+  );
 
   useEffect(() => {
     if (!authLoading) {
@@ -40,9 +51,9 @@ export default function MyOrders() {
 
   const fetchOrders = async () => {
     if (!user) return;
-    
+
     try {
-      const response = await fetch(`/api/orders?userId=${user.id}`);
+      const response = await authFetch("/api/orders");
       const data = await response.json();
 
       if (response.ok) {
@@ -106,7 +117,9 @@ export default function MyOrders() {
         {orders.length === 0 ? (
           <div className="text-center py-12">
             <p className="text-xl text-gray-600 mb-4">No orders found</p>
-            <p className="text-gray-500">You haven&apos;t placed any orders yet.</p>
+            <p className="text-gray-500">
+              You haven&apos;t placed any orders yet.
+            </p>
           </div>
         ) : (
           <div className="space-y-6">
@@ -117,7 +130,9 @@ export default function MyOrders() {
               >
                 <div className="flex justify-between items-start mb-4">
                   <div>
-                    <h2 className="text-xl font-semibold">Order #{order.id}</h2>
+                    <h2 className="text-xl font-semibold">
+                      Order #{order.id}
+                    </h2>
                     <p className="text-gray-600">
                       {formatDate(order.created_at)}
                     </p>

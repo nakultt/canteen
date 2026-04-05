@@ -1,17 +1,19 @@
 import { withTransaction } from "@/lib/db";
+import { getAuthUser } from "@/lib/auth";
+import { eventBus } from "@/lib/events";
 import { NextResponse } from "next/server";
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json();
-    const { userId } = body;
-
-    if (!userId) {
+    const user = await getAuthUser(request);
+    if (!user) {
       return NextResponse.json(
-        { error: "userId is required" },
-        { status: 400 }
+        { error: "Authentication required" },
+        { status: 401 }
       );
     }
+
+    const userId = user.id;
 
     const order = await withTransaction(async (client) => {
       // Get cart with items
@@ -20,7 +22,8 @@ export async function POST(request: Request) {
           c.id as cart_id,
           ci.food_item_id,
           ci.quantity,
-          f.price
+          f.price,
+          f.name
         FROM carts c
         JOIN cart_items ci ON c.id = ci.cart_id
         JOIN food_items f ON ci.food_item_id = f.id
@@ -36,7 +39,8 @@ export async function POST(request: Request) {
 
       // Calculate total
       const totalAmount = cartItems.reduce(
-        (sum, item) => sum + Number(item.price) * item.quantity,
+        (sum: number, item: { price: string; quantity: number }) =>
+          sum + Number(item.price) * item.quantity,
         0
       );
 
@@ -84,13 +88,26 @@ export async function POST(request: Request) {
     });
 
     // Format response
-    const items = order.map(row => ({
+    const items = order.map((row: { food_item_id: number; name: string; quantity: number; price: number; image_url: string | null }) => ({
       food_item_id: row.food_item_id,
       name: row.name,
       quantity: row.quantity,
       price: row.price,
       image_url: row.image_url,
     }));
+
+    // Emit live update for both user and admin dashboards
+    eventBus.emit({
+      type: "order:created",
+      data: {
+        orderId: order[0].id,
+        userId,
+        totalAmount: order[0].total_amount,
+        status: order[0].status,
+        itemCount: items.length,
+      },
+      companyId: user.companyId,
+    });
 
     return NextResponse.json({
       id: order[0].id,
@@ -102,11 +119,10 @@ export async function POST(request: Request) {
       message: "Order created successfully",
     });
   } catch (error) {
+    if (error instanceof Response) return error;
     console.error("Error creating order:", error);
-    const message = error instanceof Error ? error.message : "Failed to create order";
-    return NextResponse.json(
-      { error: message },
-      { status: 500 }
-    );
+    const message =
+      error instanceof Error ? error.message : "Failed to create order";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

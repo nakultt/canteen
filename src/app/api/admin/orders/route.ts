@@ -1,20 +1,30 @@
 import { query } from "@/lib/db";
+import { getAuthUser } from "@/lib/auth";
 import { NextResponse } from "next/server";
 
 // GET all orders for company
 export async function GET(request: Request) {
   try {
-    const { searchParams } = new URL(request.url);
-    const companyId = searchParams.get("companyId");
-
-    if (!companyId) {
-      return NextResponse.json(
-        { error: "companyId is required" },
-        { status: 400 }
-      );
+    const user = await getAuthUser(request);
+    if (!user) {
+      return NextResponse.json({ error: "Authentication required" }, { status: 401 });
+    }
+    if (user.role === "USER") {
+      return NextResponse.json({ error: "Admin access required" }, { status: 403 });
     }
 
-    // Get all orders from users belonging to this company
+    // Use company from JWT; DEV can specify companyId via query
+    let companyId = user.companyId;
+    if (user.role === "DEV") {
+      const { searchParams } = new URL(request.url);
+      const qc = searchParams.get("companyId");
+      if (qc) companyId = Number(qc);
+    }
+
+    if (!companyId) {
+      return NextResponse.json({ error: "No company context" }, { status: 400 });
+    }
+
     const orders = await query<{
       order_id: number;
       total_amount: number;
@@ -89,10 +99,8 @@ export async function GET(request: Request) {
       orders: Array.from(orderMap.values()),
     });
   } catch (error) {
+    if (error instanceof Response) return error;
     console.error("Error fetching orders:", error);
-    return NextResponse.json(
-      { error: "Failed to fetch orders" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Failed to fetch orders" }, { status: 500 });
   }
 }

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Image from "next/image";
+import { useAuth } from "@/lib/auth-context";
 
 interface FoodItem {
   id: number;
@@ -34,6 +35,7 @@ interface MenuDisplayProps {
 }
 
 export default function MenuDisplay({ userId, onCartUpdate }: MenuDisplayProps) {
+  const { authFetch } = useAuth();
   const [menuData, setMenuData] = useState<MenuResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [addingToCart, setAddingToCart] = useState<number | null>(null);
@@ -44,7 +46,7 @@ export default function MenuDisplay({ userId, onCartUpdate }: MenuDisplayProps) 
 
   const fetchCurrentMenu = async () => {
     try {
-      const response = await fetch("/api/menu/current");
+      const response = await authFetch("/api/menu/current");
       const data = await response.json();
       setMenuData(data);
     } catch (error) {
@@ -57,11 +59,10 @@ export default function MenuDisplay({ userId, onCartUpdate }: MenuDisplayProps) 
   const addToCart = async (foodItemId: number) => {
     setAddingToCart(foodItemId);
     try {
-      const response = await fetch("/api/cart/add", {
+      const response = await authFetch("/api/cart/add", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          userId,
           foodItemId,
           quantity: 1,
         }),
@@ -70,7 +71,7 @@ export default function MenuDisplay({ userId, onCartUpdate }: MenuDisplayProps) 
       const data = await response.json();
 
       if (response.ok) {
-        onCartUpdate?.(); // Trigger cart refresh
+        onCartUpdate?.();
       } else {
         alert(data.error || "Failed to add item");
       }

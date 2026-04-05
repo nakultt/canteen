@@ -1,20 +1,30 @@
-import { query, withTransaction } from "@/lib/db";
+import { withTransaction } from "@/lib/db";
+import { getAuthUser } from "@/lib/auth";
+import { eventBus } from "@/lib/events";
 import { NextResponse } from "next/server";
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json();
-    const { userId, foodItemId, removeAll = false } = body;
-
-    if (!userId || !foodItemId) {
+    const user = await getAuthUser(request);
+    if (!user) {
       return NextResponse.json(
-        { error: "userId and foodItemId are required" },
+        { error: "Authentication required" },
+        { status: 401 }
+      );
+    }
+
+    const userId = user.id;
+    const body = await request.json();
+    const { foodItemId, removeAll = false } = body;
+
+    if (!foodItemId) {
+      return NextResponse.json(
+        { error: "foodItemId is required" },
         { status: 400 }
       );
     }
 
     const result = await withTransaction(async (client) => {
-      // Get cart
       const cart = await client.query(
         "SELECT id FROM carts WHERE user_id = $1",
         [userId]
@@ -26,7 +36,6 @@ export async function POST(request: Request) {
 
       const cartId = cart.rows[0].id;
 
-      // Get existing item
       const existingItem = await client.query(
         "SELECT id, quantity FROM cart_items WHERE cart_id = $1 AND food_item_id = $2",
         [cartId, foodItemId]
@@ -40,17 +49,14 @@ export async function POST(request: Request) {
       const itemId = existingItem.rows[0].id;
 
       if (removeAll || currentQuantity <= 1) {
-        // Remove item entirely
         await client.query("DELETE FROM cart_items WHERE id = $1", [itemId]);
       } else {
-        // Decrease quantity by 1
         await client.query(
           "UPDATE cart_items SET quantity = quantity - 1 WHERE id = $1",
           [itemId]
         );
       }
 
-      // Return updated cart
       const updatedCart = await client.query(`
         SELECT 
           c.id as cart_id,
@@ -69,8 +75,7 @@ export async function POST(request: Request) {
       return updatedCart.rows;
     });
 
-    // Format response
-    const items = result.filter(r => r.item_id).map(r => ({
+    const items = result.filter((r: { item_id: number }) => r.item_id).map((r: { item_id: number; food_item_id: number; quantity: number; name: string; price: number; image_url: string | null }) => ({
       id: r.item_id,
       food_item_id: r.food_item_id,
       quantity: r.quantity,
@@ -79,7 +84,14 @@ export async function POST(request: Request) {
       image_url: r.image_url,
     }));
 
-    const total = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
+    const total = items.reduce((sum: number, item: { price: number; quantity: number }) => sum + item.price * item.quantity, 0);
+
+    // Emit live update
+    eventBus.emit({
+      type: "cart:updated",
+      data: { userId, itemCount: items.length },
+      companyId: user.companyId,
+    });
 
     return NextResponse.json({
       id: result[0]?.cart_id,
@@ -89,6 +101,7 @@ export async function POST(request: Request) {
       message: "Item removed from cart",
     });
   } catch (error) {
+    if (error instanceof Response) return error;
     console.error("Error removing from cart:", error);
     const message = error instanceof Error ? error.message : "Failed to remove item";
     return NextResponse.json(

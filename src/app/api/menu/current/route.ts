@@ -1,34 +1,31 @@
 import { query } from "@/lib/db";
+import { getAuthUser } from "@/lib/auth";
 import { NextResponse } from "next/server";
-
-interface FoodItem {
-  id: number;
-  name: string;
-  description: string | null;
-  price: number;
-  image_url: string | null;
-  is_available: boolean;
-}
-
-interface MenuWithItems {
-  id: number;
-  day_of_week: string;
-  meal_type: string;
-  start_time: string;
-  end_time: string;
-  items: FoodItem[];
-}
 
 export async function GET(request: Request) {
   try {
-    const { searchParams } = new URL(request.url);
-    const companyId = searchParams.get("companyId") || "1";
-    
+    const user = await getAuthUser(request);
+    if (!user) {
+      return NextResponse.json(
+        { error: "Authentication required" },
+        { status: 401 }
+      );
+    }
+
+    // Use company from JWT, not query param; require company_id
+    const companyId = user.companyId;
+    if (!companyId) {
+      return NextResponse.json(
+        { error: "No company associated with your account" },
+        { status: 400 }
+      );
+    }
+
     // Get current day and time
     const now = new Date();
     const days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
     const currentDay = days[now.getDay()];
-    const currentTime = now.toTimeString().slice(0, 5); // HH:MM format
+    const currentTime = now.toTimeString().slice(0, 5);
 
     // Get current menu based on day and time
     const menus = await query<{
@@ -67,8 +64,15 @@ export async function GET(request: Request) {
     `, [companyId, currentDay, currentTime]);
 
     // Group items by menu
-    const menuMap = new Map<number, MenuWithItems>();
-    
+    const menuMap = new Map<number, {
+      id: number;
+      day_of_week: string;
+      meal_type: string;
+      start_time: string;
+      end_time: string;
+      items: { id: number; name: string; description: string | null; price: number; image_url: string | null; is_available: boolean }[];
+    }>();
+
     for (const row of menus) {
       if (!menuMap.has(row.menu_id)) {
         menuMap.set(row.menu_id, {
@@ -80,7 +84,7 @@ export async function GET(request: Request) {
           items: [],
         });
       }
-      
+
       if (row.food_id) {
         menuMap.get(row.menu_id)!.items.push({
           id: row.food_id,
@@ -140,7 +144,7 @@ export async function GET(request: Request) {
             items: [],
           });
         }
-        
+
         if (row.food_id) {
           menuMap.get(row.menu_id)!.items.push({
             id: row.food_id,
@@ -167,6 +171,7 @@ export async function GET(request: Request) {
       menus: result,
     });
   } catch (error) {
+    if (error instanceof Response) return error;
     console.error("Error fetching current menu:", error);
     return NextResponse.json(
       { error: "Failed to fetch menu" },

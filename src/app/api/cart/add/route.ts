@@ -1,21 +1,32 @@
-import { query, queryOne, withTransaction } from "@/lib/db";
+import { withTransaction } from "@/lib/db";
+import { getAuthUser } from "@/lib/auth";
+import { eventBus } from "@/lib/events";
 import { NextResponse } from "next/server";
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json();
-    const { userId, foodItemId, quantity = 1 } = body;
-
-    if (!userId || !foodItemId) {
+    const user = await getAuthUser(request);
+    if (!user) {
       return NextResponse.json(
-        { error: "userId and foodItemId are required" },
+        { error: "Authentication required" },
+        { status: 401 }
+      );
+    }
+
+    const userId = user.id;
+    const body = await request.json();
+    const { foodItemId, quantity = 1 } = body;
+
+    if (!foodItemId) {
+      return NextResponse.json(
+        { error: "foodItemId is required" },
         { status: 400 }
       );
     }
 
     const result = await withTransaction(async (client) => {
       // Check if cart exists for user
-      let cart = await client.query(
+      const cart = await client.query(
         "SELECT id FROM carts WHERE user_id = $1",
         [userId]
       );
@@ -23,7 +34,6 @@ export async function POST(request: Request) {
       let cartId: number;
 
       if (cart.rows.length === 0) {
-        // Create new cart
         const newCart = await client.query(
           "INSERT INTO carts (user_id) VALUES ($1) RETURNING id",
           [userId]
@@ -40,14 +50,12 @@ export async function POST(request: Request) {
       );
 
       if (existingItem.rows.length > 0) {
-        // Update quantity
         const newQuantity = existingItem.rows[0].quantity + quantity;
         await client.query(
           "UPDATE cart_items SET quantity = $1 WHERE id = $2",
           [newQuantity, existingItem.rows[0].id]
         );
       } else {
-        // Add new item
         await client.query(
           "INSERT INTO cart_items (cart_id, food_item_id, quantity) VALUES ($1, $2, $3)",
           [cartId, foodItemId, quantity]
@@ -73,8 +81,7 @@ export async function POST(request: Request) {
       return updatedCart.rows;
     });
 
-    // Format response
-    const items = result.filter(r => r.item_id).map(r => ({
+    const items = result.filter((r: { item_id: number }) => r.item_id).map((r: { item_id: number; food_item_id: number; quantity: number; name: string; price: number; image_url: string | null }) => ({
       id: r.item_id,
       food_item_id: r.food_item_id,
       quantity: r.quantity,
@@ -83,7 +90,14 @@ export async function POST(request: Request) {
       image_url: r.image_url,
     }));
 
-    const total = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
+    const total = items.reduce((sum: number, item: { price: number; quantity: number }) => sum + item.price * item.quantity, 0);
+
+    // Emit live update
+    eventBus.emit({
+      type: "cart:updated",
+      data: { userId, itemCount: items.length },
+      companyId: user.companyId,
+    });
 
     return NextResponse.json({
       id: result[0]?.cart_id,
@@ -93,6 +107,7 @@ export async function POST(request: Request) {
       message: "Item added to cart",
     });
   } catch (error) {
+    if (error instanceof Response) return error;
     console.error("Error adding to cart:", error);
     return NextResponse.json(
       { error: "Failed to add item to cart" },

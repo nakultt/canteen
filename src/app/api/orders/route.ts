@@ -1,33 +1,18 @@
 import { query } from "@/lib/db";
+import { getAuthUser } from "@/lib/auth";
 import { NextResponse } from "next/server";
-
-interface OrderItem {
-  food_item_id: number;
-  name: string;
-  quantity: number;
-  price: number;
-  image_url: string | null;
-}
-
-interface Order {
-  id: number;
-  total_amount: number;
-  status: string;
-  created_at: string;
-  items: OrderItem[];
-}
 
 export async function GET(request: Request) {
   try {
-    const { searchParams } = new URL(request.url);
-    const userId = searchParams.get("userId");
-
-    if (!userId) {
+    const user = await getAuthUser(request);
+    if (!user) {
       return NextResponse.json(
-        { error: "userId is required" },
-        { status: 400 }
+        { error: "Authentication required" },
+        { status: 401 }
       );
     }
+
+    const userId = user.id;
 
     // Get all orders with items
     const rows = await query<{
@@ -59,7 +44,13 @@ export async function GET(request: Request) {
     `, [userId]);
 
     // Group by order
-    const orderMap = new Map<number, Order>();
+    const orderMap = new Map<number, {
+      id: number;
+      total_amount: number;
+      status: string;
+      created_at: string;
+      items: { food_item_id: number; name: string; quantity: number; price: number; image_url: string | null }[];
+    }>();
 
     for (const row of rows) {
       if (!orderMap.has(row.order_id)) {
@@ -87,6 +78,7 @@ export async function GET(request: Request) {
       orders: Array.from(orderMap.values()),
     });
   } catch (error) {
+    if (error instanceof Response) return error;
     console.error("Error fetching orders:", error);
     return NextResponse.json(
       { error: "Failed to fetch orders" },

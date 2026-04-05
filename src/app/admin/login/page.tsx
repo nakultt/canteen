@@ -5,7 +5,7 @@ import { useAuth } from "@/lib/auth-context";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 
-export default function UserLoginPage() {
+export default function AdminLoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -18,10 +18,10 @@ export default function UserLoginPage() {
     setError("");
     setLoading(true);
 
-    const result = await login(email, password, "USER");
+    const result = await login(email, password, ["ADMIN", "DEV"]);
 
     if (result.success) {
-      router.push("/");
+      router.push("/admin");
     } else {
       setError(result.error || "Login failed");
     }
@@ -30,13 +30,16 @@ export default function UserLoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-blue-600 to-indigo-800 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md">
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-emerald-800">
-            CanteenConnect
-          </h1>
-          <p className="text-gray-600 mt-2">Sign in to order food</p>
+          <div className="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center mx-auto mb-4">
+            <span className="text-white text-2xl font-bold">⚙</span>
+          </div>
+          <h1 className="text-3xl font-bold text-blue-800">Admin Panel</h1>
+          <p className="text-gray-600 mt-2">
+            Sign in to manage your canteen
+          </p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">
@@ -48,16 +51,16 @@ export default function UserLoginPage() {
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Email Address
+              Admin Email
             </label>
             <input
-              id="user-email"
+              id="admin-email"
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all"
-              placeholder="you@example.com"
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+              placeholder="admin@company.com"
             />
           </div>
 
@@ -66,43 +69,33 @@ export default function UserLoginPage() {
               Password
             </label>
             <input
-              id="user-password"
+              id="admin-password"
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all"
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
               placeholder="Enter your password"
             />
           </div>
 
           <button
-            id="user-login-btn"
+            id="admin-login-btn"
             type="submit"
             disabled={loading}
-            className="w-full bg-emerald-600 text-white py-3 rounded-lg hover:bg-emerald-700 transition-colors font-semibold disabled:bg-gray-400 disabled:cursor-not-allowed"
+            className="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 transition-colors font-semibold disabled:bg-gray-400 disabled:cursor-not-allowed"
           >
-            {loading ? "Signing in..." : "Sign In"}
+            {loading ? "Signing in..." : "Sign In as Admin"}
           </button>
         </form>
 
         <div className="mt-8 pt-6 border-t text-center">
-          <p className="text-sm text-gray-500 mb-3">Staff access:</p>
-          <div className="flex gap-3 justify-center">
-            <Link
-              href="/admin/login"
-              className="text-sm text-blue-600 hover:underline"
-            >
-              Admin Login
-            </Link>
-            <span className="text-gray-300">|</span>
-            <Link
-              href="/dev/login"
-              className="text-sm text-purple-600 hover:underline"
-            >
-              Dev Login
-            </Link>
-          </div>
+          <Link
+            href="/login"
+            className="text-sm text-gray-500 hover:text-gray-700"
+          >
+            ← Back to User Login
+          </Link>
         </div>
       </div>
     </div>

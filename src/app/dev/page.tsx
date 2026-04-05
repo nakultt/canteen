@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useAuth } from "@/lib/auth-context";
+import { useLiveUpdates } from "@/lib/use-live-updates";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 
@@ -14,30 +15,16 @@ interface Company {
 }
 
 export default function DevDashboard() {
-  const { user, loading } = useAuth();
+  const { user, loading, authFetch } = useAuth();
   const router = useRouter();
   const [companies, setCompanies] = useState<Company[]>([]);
   const [userCount, setUserCount] = useState(0);
 
-  useEffect(() => {
-    if (!loading) {
-      if (!user) {
-        router.push("/login");
-        return;
-      }
-      if (user.role !== "DEV") {
-        router.push("/");
-        return;
-      }
-      fetchData();
-    }
-  }, [user, loading, router]);
-
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     try {
       const [compRes, userRes] = await Promise.all([
-        fetch("/api/dev/companies"),
-        fetch("/api/dev/users"),
+        authFetch("/api/dev/companies"),
+        authFetch("/api/dev/users"),
       ]);
 
       const compData = await compRes.json();
@@ -48,7 +35,40 @@ export default function DevDashboard() {
     } catch (error) {
       console.error("Error fetching data:", error);
     }
-  };
+  }, [authFetch]);
+
+  // Live updates — refresh when users, companies, or orders change
+  useLiveUpdates(
+    (event) => {
+      if (
+        event.type === "user:created" ||
+        event.type === "user:updated" ||
+        event.type === "user:deleted" ||
+        event.type === "company:created" ||
+        event.type === "company:updated" ||
+        event.type === "company:deleted" ||
+        event.type === "order:created" ||
+        event.type === "order:updated"
+      ) {
+        fetchData();
+      }
+    },
+    !!user && user.role === "DEV"
+  );
+
+  useEffect(() => {
+    if (!loading) {
+      if (!user) {
+        router.push("/dev/login");
+        return;
+      }
+      if (user.role !== "DEV") {
+        router.push("/");
+        return;
+      }
+      fetchData();
+    }
+  }, [user, loading, router, fetchData]);
 
   if (loading || !user) {
     return (
@@ -65,7 +85,10 @@ export default function DevDashboard() {
         <div className="container mx-auto flex justify-between items-center">
           <div>
             <h1 className="text-2xl font-bold">DEV Dashboard</h1>
-            <p className="text-purple-300">Global System Administration</p>
+            <p className="text-purple-300">
+              Global System Administration
+              <span className="ml-2 inline-block w-2 h-2 bg-green-400 rounded-full" title="Live updates active" />
+            </p>
           </div>
           <div className="flex items-center gap-4">
             <span>Welcome, {user.name}</span>
@@ -75,7 +98,10 @@ export default function DevDashboard() {
             <Link href="/" className="text-purple-300 hover:text-white">
               User View
             </Link>
-            <Link href="/profile" className="text-purple-300 hover:text-white">
+            <Link
+              href="/profile"
+              className="text-purple-300 hover:text-white"
+            >
               Profile
             </Link>
           </div>
@@ -88,15 +114,23 @@ export default function DevDashboard() {
         <div className="grid md:grid-cols-3 gap-6 mb-8">
           <div className="bg-gray-800 rounded-lg p-6">
             <h3 className="text-gray-400 text-sm">Total Companies</h3>
-            <p className="text-4xl font-bold text-purple-400">{companies.length}</p>
-            <Link href="/dev/companies" className="text-purple-400 text-sm hover:underline">
+            <p className="text-4xl font-bold text-purple-400">
+              {companies.length}
+            </p>
+            <Link
+              href="/dev/companies"
+              className="text-purple-400 text-sm hover:underline"
+            >
               Manage →
             </Link>
           </div>
           <div className="bg-gray-800 rounded-lg p-6">
             <h3 className="text-gray-400 text-sm">Total Users</h3>
             <p className="text-4xl font-bold text-green-400">{userCount}</p>
-            <Link href="/dev/users" className="text-purple-400 text-sm hover:underline">
+            <Link
+              href="/dev/users"
+              className="text-purple-400 text-sm hover:underline"
+            >
               Manage →
             </Link>
           </div>
@@ -132,9 +166,13 @@ export default function DevDashboard() {
                 {companies.slice(0, 5).map((company) => (
                   <tr key={company.id} className="border-b border-gray-700">
                     <td className="py-3 font-medium">{company.name}</td>
-                    <td className="py-3 text-gray-400">{company.address || "-"}</td>
+                    <td className="py-3 text-gray-400">
+                      {company.address || "-"}
+                    </td>
                     <td className="py-3 text-center">{company.user_count}</td>
-                    <td className="py-3 text-center">{company.admin_count}</td>
+                    <td className="py-3 text-center">
+                      {company.admin_count}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -148,15 +186,23 @@ export default function DevDashboard() {
             href="/dev/companies"
             className="block p-6 bg-gray-800 rounded-lg hover:bg-gray-700 transition-colors"
           >
-            <h3 className="font-bold text-purple-400 text-lg">Manage Companies</h3>
-            <p className="text-gray-400">Add, edit, or remove companies from the system</p>
+            <h3 className="font-bold text-purple-400 text-lg">
+              Manage Companies
+            </h3>
+            <p className="text-gray-400">
+              Add, edit, or remove companies from the system
+            </p>
           </Link>
           <Link
             href="/dev/users"
             className="block p-6 bg-gray-800 rounded-lg hover:bg-gray-700 transition-colors"
           >
-            <h3 className="font-bold text-green-400 text-lg">Manage Users</h3>
-            <p className="text-gray-400">View and manage all users across companies</p>
+            <h3 className="font-bold text-green-400 text-lg">
+              Manage Users
+            </h3>
+            <p className="text-gray-400">
+              View and manage all users across companies
+            </p>
           </Link>
         </div>
       </main>

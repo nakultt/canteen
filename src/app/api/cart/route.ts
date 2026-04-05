@@ -1,33 +1,18 @@
 import { query } from "@/lib/db";
+import { getAuthUser } from "@/lib/auth";
 import { NextResponse } from "next/server";
-
-interface CartItem {
-  id: number;
-  food_item_id: number;
-  quantity: number;
-  name: string;
-  price: number;
-  image_url: string | null;
-}
-
-interface Cart {
-  id: number;
-  user_id: number;
-  items: CartItem[];
-  total: number;
-}
 
 export async function GET(request: Request) {
   try {
-    const { searchParams } = new URL(request.url);
-    const userId = searchParams.get("userId");
-
-    if (!userId) {
+    const user = await getAuthUser(request);
+    if (!user) {
       return NextResponse.json(
-        { error: "userId is required" },
-        { status: 400 }
+        { error: "Authentication required" },
+        { status: 401 }
       );
     }
+
+    const userId = user.id;
 
     // Get cart with items
     const cartItems = await query<{
@@ -56,19 +41,18 @@ export async function GET(request: Request) {
     `, [userId]);
 
     if (cartItems.length === 0) {
-      // No cart exists
       return NextResponse.json({
         id: null,
-        user_id: Number.parseInt(userId),
+        user_id: userId,
         items: [],
         total: 0,
       });
     }
 
-    const cart: Cart = {
+    const cart = {
       id: cartItems[0].cart_id,
       user_id: cartItems[0].user_id,
-      items: [],
+      items: [] as { id: number; food_item_id: number; quantity: number; name: string; price: number; image_url: string | null }[],
       total: 0,
     };
 
@@ -88,6 +72,7 @@ export async function GET(request: Request) {
 
     return NextResponse.json(cart);
   } catch (error) {
+    if (error instanceof Response) return error;
     console.error("Error fetching cart:", error);
     return NextResponse.json(
       { error: "Failed to fetch cart" },

@@ -20,7 +20,7 @@ interface UserProfile {
 }
 
 export default function Profile() {
-  const { user, loading: authLoading, logout } = useAuth();
+  const { user, loading: authLoading, logout, authFetch } = useAuth();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
@@ -43,9 +43,9 @@ export default function Profile() {
 
   const fetchProfile = async () => {
     if (!user) return;
-    
+
     try {
-      const response = await fetch(`/api/user/${user.id}`);
+      const response = await authFetch(`/api/user/${user.id}`);
       if (response.ok) {
         const data = await response.json();
         setProfile(data);
@@ -71,10 +71,10 @@ export default function Profile() {
 
   const handleSave = async () => {
     if (!user) return;
-    
+
     setSaving(true);
     try {
-      const response = await fetch(`/api/user/${user.id}`, {
+      const response = await authFetch(`/api/user/${user.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(formData),
@@ -229,8 +229,12 @@ export default function Profile() {
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Company / Organization
                   </label>
-                  <p className="text-lg text-gray-900">{profile.company.name}</p>
-                  <p className="text-sm text-gray-500">{profile.company.address}</p>
+                  <p className="text-lg text-gray-900">
+                    {profile.company.name}
+                  </p>
+                  <p className="text-sm text-gray-500">
+                    {profile.company.address}
+                  </p>
                 </div>
               )}
 

@@ -1,4 +1,5 @@
-import { query, queryOne } from "@/lib/db";
+import { queryOne } from "@/lib/db";
+import { verifyPassword, createToken } from "@/lib/auth";
 import { NextResponse } from "next/server";
 
 interface User {
@@ -6,14 +7,14 @@ interface User {
   email: string;
   name: string;
   password: string;
-  role: string;
+  role: "DEV" | "ADMIN" | "USER";
   company_id: number | null;
 }
 
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { email, password } = body;
+    const { email, password, allowedRole } = body;
 
     if (!email || !password) {
       return NextResponse.json(
@@ -36,12 +37,28 @@ export async function POST(request: Request) {
       );
     }
 
-    // Check password (plain text for now - TODO: add bcrypt)
-    if (user.password !== password) {
+    // Verify bcrypt password
+    const valid = await verifyPassword(password, user.password);
+    if (!valid) {
       return NextResponse.json(
         { error: "Invalid email or password" },
         { status: 401 }
       );
+    }
+
+    // If a specific login portal is used, enforce the role
+    if (allowedRole) {
+      const allowed: string[] = Array.isArray(allowedRole)
+        ? allowedRole
+        : [allowedRole];
+      if (!allowed.includes(user.role)) {
+        return NextResponse.json(
+          {
+            error: `This login is for ${allowed.join("/")} accounts only. Your account role is ${user.role}.`,
+          },
+          { status: 403 }
+        );
+      }
     }
 
     // Get company name if user has one
@@ -54,8 +71,16 @@ export async function POST(request: Request) {
       companyName = company?.name;
     }
 
-    // Return user data (excluding password)
-    return NextResponse.json({
+    // Create JWT
+    const token = await createToken({
+      id: user.id,
+      role: user.role,
+      companyId: user.company_id,
+    });
+
+    // Build response with HttpOnly cookie
+    const response = NextResponse.json({
+      token,
       user: {
         id: user.id,
         email: user.email,
@@ -66,11 +91,18 @@ export async function POST(request: Request) {
       },
       message: "Login successful",
     });
+
+    response.cookies.set("token", token, {
+      httpOnly: true,
+      sameSite: "strict",
+      path: "/",
+      maxAge: 86400, // 24 hours
+      secure: process.env.NODE_ENV === "production",
+    });
+
+    return response;
   } catch (error) {
     console.error("Login error:", error);
-    return NextResponse.json(
-      { error: "Login failed" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Login failed" }, { status: 500 });
   }
 }
